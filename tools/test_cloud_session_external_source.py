@@ -103,7 +103,7 @@ def main(): # noqa: D103
     original_schema = df.schema
     df.write.csv(f"{s3_path}/test_file.csv")
 
-    logger.info("Testing simple infer schema from parquet file")
+    logger.info("Testing simple infer schema from csv file")
     df = session.read.csv(f"{s3_path}/test_file.csv")
     assert df.schema == original_schema  # nosec: B101
     df.show()
