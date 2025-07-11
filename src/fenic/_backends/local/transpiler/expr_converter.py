@@ -97,7 +97,6 @@ from fenic.core._logical_plan.expressions import (
     UDFExpr,
     WhenExpr,
 )
-from fenic.core._utils.extract import convert_extract_schema_to_pydantic_type
 from fenic.core._utils.schema import (
     convert_custom_dtype_to_polars,
     convert_pydantic_type_to_custom_struct_type,
@@ -115,7 +114,6 @@ from fenic.core.types.datatypes import (
     StructType,
     _PrimitiveType,
 )
-from fenic.core.types.extract_schema import ExtractSchema
 
 
 class ExprConverter:
@@ -499,15 +497,10 @@ class ExprConverter:
 
     @_convert_expr.register(SemanticExtractExpr)
     def _convert_semantic_extract_expr(self, logical: SemanticExtractExpr) -> pl.Expr:
-        pydantic_model = (
-                convert_extract_schema_to_pydantic_type(logical.schema)
-                if isinstance(logical.schema, ExtractSchema)
-                else logical.schema
-            )
         def sem_ext_fn(batch: pl.Series) -> pl.Series:
             return SemanticExtract(
                 input=batch,
-                schema=pydantic_model,
+                schema=logical.schema,
                 model=self.session_state.get_language_model(logical.model_alias),
                 max_output_tokens=logical.max_tokens,
                 temperature=logical.temperature,
@@ -516,7 +509,7 @@ class ExprConverter:
         return self._convert_expr(logical.expr).map_batches(
             sem_ext_fn,
             return_dtype=convert_custom_dtype_to_polars(
-                convert_pydantic_type_to_custom_struct_type(pydantic_model)
+                convert_pydantic_type_to_custom_struct_type(logical.schema)
             ),
         )
 
