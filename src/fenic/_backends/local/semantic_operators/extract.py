@@ -15,6 +15,7 @@ from fenic._backends.local.semantic_operators.utils import (
     validate_structured_response,
 )
 from fenic._inference.language_model import InferenceConfiguration, LanguageModel
+from fenic.core._logical_plan.resolved_types import ResolvedModelAlias
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class Extract(BaseSingleColumnInputOperator[str, Dict[str, Any]]):
         model: LanguageModel,
         max_output_tokens: int,
         temperature: float,
+        model_alias: Optional[ResolvedModelAlias] = None,
     ):
         self.output_model = schema
         super().__init__(
@@ -55,6 +57,7 @@ class Extract(BaseSingleColumnInputOperator[str, Dict[str, Any]]):
                     max_output_tokens=max_output_tokens,
                     temperature=temperature,
                     response_format=self.output_model,
+                    model_profile=model_alias.profile if model_alias else None,
                 ),
                 model=model,
             ),

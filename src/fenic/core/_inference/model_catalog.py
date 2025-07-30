@@ -6,7 +6,7 @@ class ModelProvider(Enum):
     """Enum representing different model providers supported by the system."""
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
-    GOOGLE_GLA = "google-gla"
+    GOOGLE_DEVELOPER = "google-developer"
     GOOGLE_VERTEX = "google-vertex"
 
 class TieredTokenCost:
@@ -73,7 +73,7 @@ class EmbeddingModelParameters:
 
 CompletionModelCollection: TypeAlias = Dict[str, CompletionModelParameters]
 EmbeddingModelCollection: TypeAlias = Dict[str, EmbeddingModelParameters]
-OPENAI_AVAILABLE_LANGUAGE_MODELS = Literal[
+OpenAILanguageModelName = Literal[
     "gpt-4.1",
     "gpt-4.1-mini",
     "gpt-4.1-nano",
@@ -91,14 +91,19 @@ OPENAI_AVAILABLE_LANGUAGE_MODELS = Literal[
     "gpt-4",
     "gpt-4-0314",
     "gpt-4-0613",
+    "o1",
+    "o1-mini",
+    "o3",
+    "o3-mini",
+    "o4-mini"
 ]
 
-OPENAI_AVAILABLE_EMBEDDING_MODELS = Literal[
+OpenAIEmbeddingModelName = Literal[
     "text-embedding-3-small",
     "text-embedding-3-large"
 ]
 
-ANTHROPIC_AVAILABLE_LANGUAGE_MODELS = Literal[
+AnthropicLanguageModelName = Literal[
     "claude-3-7-sonnet-latest",
     "claude-3-7-sonnet-20250219",
     "claude-3-5-haiku-latest",
@@ -117,11 +122,10 @@ ANTHROPIC_AVAILABLE_LANGUAGE_MODELS = Literal[
     "claude-3-haiku-20240307",
 ]
 
-GOOGLE_GLA_AVAILABLE_MODELS = Literal[
+GoogleDeveloperLanguageModelName = Literal[
     "gemini-2.5-pro",
-    "gemini-2.5-pro-preview-06-05",
     "gemini-2.5-flash",
-    "gemini-2.5-flash-lite-preview-06-17",
+    "gemini-2.5-flash-lite",
     "gemini-2.0-flash-lite",
     "gemini-2.0-flash-lite-001",
     "gemini-2.0-flash",
@@ -130,10 +134,10 @@ GOOGLE_GLA_AVAILABLE_MODELS = Literal[
 ]
 
 
-GOOGLE_VERTEX_AVAILABLE_MODELS = Union[GOOGLE_GLA_AVAILABLE_MODELS]
+GoogleVertexLanguageModelName = GoogleDeveloperLanguageModelName
 
-AVAILABLE_LANGUAGE_MODELS = Union[OPENAI_AVAILABLE_LANGUAGE_MODELS, ANTHROPIC_AVAILABLE_LANGUAGE_MODELS, GOOGLE_GLA_AVAILABLE_MODELS]
-AVAILABLE_EMBEDDING_MODELS = Union[OPENAI_AVAILABLE_EMBEDDING_MODELS]
+AVAILABLE_LANGUAGE_MODELS = Union[OpenAILanguageModelName, AnthropicLanguageModelName, GoogleDeveloperLanguageModelName]
+AVAILABLE_EMBEDDING_MODELS = Union[OpenAIEmbeddingModelName]
 
 class ModelCatalog:
     """Catalog of supported models and their parameters for different providers.
@@ -152,6 +156,7 @@ class ModelCatalog:
                 output_token_cost=75.00 / 1_000_000,  # $75 per 1M tokens
                 context_window_length=200_000,
                 max_output_tokens=32_000,
+                supports_reasoning=True,
             ),
             "claude-sonnet-4-0": CompletionModelParameters(
                 input_token_cost=3.00 / 1_000_000,  # $3 per 1M tokens
@@ -160,6 +165,7 @@ class ModelCatalog:
                 output_token_cost=15.00 / 1_000_000,  # $15 per 1M tokens
                 context_window_length=200_000,
                 max_output_tokens=64_000,
+                supports_reasoning=True,
             ),
             "claude-3-7-sonnet-latest": CompletionModelParameters(
                 input_token_cost=3.0 / 1_000_000,  # $3 per 1M tokens
@@ -168,6 +174,7 @@ class ModelCatalog:
                 output_token_cost=15.00 / 1_000_000,  # $15 per 1M tokens
                 context_window_length=200_000,
                 max_output_tokens=128_000,
+                supports_reasoning=True,
             ),
             "claude-3-5-sonnet-latest": CompletionModelParameters(
                 input_token_cost=3 / 1_000_000,  # $3 per 1M tokens
@@ -259,6 +266,50 @@ class ModelCatalog:
                 max_output_tokens=32_768,
                 max_temperature=2,
             ),
+            "o1": CompletionModelParameters(
+                input_token_cost=15 / 1_000_000,  # $15 per 1M tokens
+                cached_input_token_read_cost=7.50 / 1_000_000,  # N/A
+                output_token_cost=60 / 1_000_000,  # $30 per 1M tokens
+                context_window_length=200_000,
+                max_output_tokens=100_000,
+                max_temperature=2.0,
+                supports_reasoning=True,
+            ),
+            "o1-mini": CompletionModelParameters(
+                input_token_cost=1.10 / 1_000_000,  # $1.10 per 1M tokens
+                cached_input_token_read_cost=0.55 / 1_000_000,  # $0.55 per 1M tokens
+                output_token_cost=4.40 / 1_000_000,  # $4.40 per 1M tokens
+                context_window_length=128_000,
+                max_output_tokens=65_536,
+                supports_reasoning=True
+            ),
+            "o3" : CompletionModelParameters(
+                input_token_cost=2 / 1_000_000,  # $2 per 1M tokens
+                cached_input_token_read_cost=0.50 / 1_000_000,  # $1.50 per 1M tokens
+                output_token_cost=8 / 1_000_000,  # $10 per 1M tokens
+                context_window_length=200_000,
+                max_output_tokens=100_000,
+                max_temperature=2.0,
+                supports_reasoning=True,
+            ),
+            "o3-mini" : CompletionModelParameters(
+                input_token_cost=1.10 / 1_000_000,  # $1.10 per 1M tokens
+                cached_input_token_read_cost=0.55 / 1_000_000,  # $0.55 per 1M tokens
+                output_token_cost=4.40 / 1_000_000,  # $4.40 per 1M tokens
+                context_window_length=200_000,
+                max_output_tokens=100_000,
+                max_temperature=2.0,
+                supports_reasoning=True,
+            ),
+            "o4-mini" : CompletionModelParameters(
+                input_token_cost=1.10 / 1_000_000,  # $1.10 per 1M tokens
+                cached_input_token_read_cost=0.275 / 1_000_000,  # $0.275 per 1M tokens
+                output_token_cost=4.40 / 1_000_000,  # $4.40 per 1M tokens
+                context_window_length=200_000,
+                max_output_tokens=100_000,
+                max_temperature=2.0,
+                supports_reasoning=True,
+            ),
         }
         self._openai_embedding_models = {
             "text-embedding-3-small": EmbeddingModelParameters(
@@ -299,7 +350,7 @@ class ModelCatalog:
                 max_temperature=2.0,
                 supports_reasoning=True,
             ),
-            "gemini-2.5-flash-lite-preview-06-17": CompletionModelParameters(
+            "gemini-2.5-flash-lite": CompletionModelParameters(
                 input_token_cost=0.10 / 1_000_000,  # $0.075 per 1M tokens
                 output_token_cost=0.40 / 1_000_000,  # $0.30 per 1M tokens
                 context_window_length=1_000_000,
@@ -350,8 +401,8 @@ class ModelCatalog:
                 max_temperature=2.0,
                 supports_reasoning=True,
             ),
-            "gemini-2.5-flash-lite-preview-06-17" : CompletionModelParameters(
-                input_token_cost=0.10 / 1_000_000, # $0.075 per 1M tokens
+            "gemini-2.5-flash-lite" : CompletionModelParameters(
+                input_token_cost=0.10 / 1_000_000, # $0.10 per 1M tokens
                 output_token_cost=0.40 / 1_000_000, # $0.30 per 1M tokens
                 context_window_length=1_000_000,
                 max_output_tokens=64_000,
@@ -409,9 +460,9 @@ class ModelCatalog:
                 "gemini-2.0-flash-001",
                 "gemini-2.0-flash-exp",
             ],
-            (ModelProvider.GOOGLE_GLA, "gemini-2.5-pro") : ["gemini-2.5-pro-preview-06-05"],
-            (ModelProvider.GOOGLE_GLA, "gemini-2.0-flash-lite") : ["gemini-2.0-flash-lite-001"],
-            (ModelProvider.GOOGLE_GLA, "gemini-2.0-flash") : [
+            (ModelProvider.GOOGLE_DEVELOPER, "gemini-2.5-pro") : ["gemini-2.5-pro-preview-06-05"],
+            (ModelProvider.GOOGLE_DEVELOPER, "gemini-2.0-flash-lite") : ["gemini-2.0-flash-lite-001"],
+            (ModelProvider.GOOGLE_DEVELOPER, "gemini-2.0-flash") : [
                 "gemini-2.0-flash-001",
                 "gemini-2.0-flash-exp",
             ],
@@ -432,10 +483,10 @@ class ModelCatalog:
                 self._language_model_snapshots,
                 ModelProvider.OPENAI
             ),
-            ModelProvider.GOOGLE_GLA: self._create_complete_model_collection(
+            ModelProvider.GOOGLE_DEVELOPER: self._create_complete_model_collection(
                 self._google_developer_completion_models,
                 self._language_model_snapshots,
-                ModelProvider.GOOGLE_GLA
+                ModelProvider.GOOGLE_DEVELOPER
             ),
             ModelProvider.GOOGLE_VERTEX: self._create_complete_model_collection(
                 self._google_vertex_completion_models,

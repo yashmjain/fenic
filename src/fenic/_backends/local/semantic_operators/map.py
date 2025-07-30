@@ -16,6 +16,7 @@ from fenic._backends.local.semantic_operators.utils import (
     validate_structured_response,
 )
 from fenic._inference.language_model import InferenceConfiguration, LanguageModel
+from fenic.core._logical_plan.resolved_types import ResolvedModelAlias
 from fenic.core._utils.misc import parse_instruction
 from fenic.core.types import (
     MapExample,
@@ -61,7 +62,7 @@ class Map(BaseMultiColumnInputOperator[str, Union[str, dict[str, Any]]]):
         model: LanguageModel,
         max_tokens: int,
         temperature: float,
-        model_alias: Optional[str] = None,
+        model_alias: Optional[ResolvedModelAlias] = None,
         response_format: Optional[type[BaseModel]] = None,
         examples: Optional[MapExampleCollection] = None,
     ):
@@ -74,6 +75,7 @@ class Map(BaseMultiColumnInputOperator[str, Union[str, dict[str, Any]]]):
                     max_output_tokens=max_tokens,
                     response_format=response_format,
                     temperature=temperature,
+                    model_profile=model_alias.profile if model_alias else None,
                 ),
             ),
             examples,

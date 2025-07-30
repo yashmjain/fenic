@@ -8,13 +8,15 @@ from fenic.api.column import Column, ColumnOrName
 from fenic.core._logical_plan.expressions import (
     AnalyzeSentimentExpr,
     EmbeddingsExpr,
-    ResolvedClassDefinition,
     SemanticClassifyExpr,
     SemanticExtractExpr,
     SemanticMapExpr,
     SemanticPredExpr,
     SemanticReduceExpr,
     SemanticSummarizeExpr,
+)
+from fenic.core._logical_plan.resolved_types import (
+    ResolvedClassDefinition,
 )
 from fenic.core._utils.structured_outputs import (
     OutputFormatValidationError,
@@ -29,16 +31,17 @@ from fenic.core.types import (
     Paragraph,
     PredicateExampleCollection,
 )
+from fenic.core.types.semantic import ModelAlias, _resolve_model_alias
 
 
 @validate_call(config=ConfigDict(arbitrary_types_allowed=True, strict=True))
 def map(
-        instruction: str,
-        examples: Optional[MapExampleCollection] = None,
-        schema: Optional[type[BaseModel]] = None,
-        model_alias: Optional[str] = None,
-        temperature: float = 0,
-        max_output_tokens: int = 512,
+    instruction: str,
+    examples: Optional[MapExampleCollection] = None,
+    schema: Optional[type[BaseModel]] = None,
+        model_alias: Optional[Union[str, ModelAlias]] = None,
+    temperature: float = 0,
+    max_output_tokens: int = 512,
 ) -> Column:
     """Applies a natural language instruction to one or more text columns, enabling rich summarization and generation tasks.
 
@@ -88,12 +91,13 @@ def map(
         except OutputFormatValidationError as e:
             raise ValidationError("Invalid response schema") from e
 
+    resolved_model_alias = _resolve_model_alias(model_alias)
     return Column._from_logical_expr(
         SemanticMapExpr(
             instruction,
             examples=examples,
             max_tokens=max_output_tokens,
-            model_alias=model_alias,
+            model_alias=resolved_model_alias,
             temperature=temperature,
             response_format=schema,
         )
@@ -102,11 +106,11 @@ def map(
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
 def extract(
-        column: ColumnOrName,
-        schema: type[BaseModel],
-        max_output_tokens: int = 1024,
-        temperature: float = 0,
-        model_alias: Optional[str] = None,
+    column: ColumnOrName,
+    schema: type[BaseModel],
+    max_output_tokens: int = 1024,
+    temperature: float = 0,
+    model_alias: Optional[Union[str, ModelAlias]] = None,
 ) -> Column:
     """Extracts structured information from unstructured text using a provided Pydantic model schema.
 
@@ -154,12 +158,13 @@ def extract(
     except OutputFormatValidationError as e:
         raise ValidationError("Invalid extraction schema") from e
 
+    resolved_model_alias = _resolve_model_alias(model_alias)
     return Column._from_logical_expr(
         SemanticExtractExpr(
             Column._from_col_or_name(column)._logical_expr,
             max_tokens=max_output_tokens,
             temperature=temperature,
-            model_alias=model_alias,
+            model_alias=resolved_model_alias,
             schema=schema,
         )
     )
@@ -167,10 +172,10 @@ def extract(
 
 @validate_call(config=ConfigDict(arbitrary_types_allowed=True, strict=True))
 def predicate(
-        instruction: str,
-        examples: Optional[PredicateExampleCollection] = None,
-        model_alias: Optional[str] = None,
-        temperature: float = 0,
+    instruction: str,
+    examples: Optional[PredicateExampleCollection] = None,
+    model_alias: Optional[Union[str, ModelAlias]] = None,
+    temperature: float = 0,
 ) -> Column:
     """Applies a natural language predicate to one or more string columns, returning a boolean result.
 
@@ -216,11 +221,12 @@ def predicate(
         semantic.predicate("Does this support ticket describe a billing issue? {ticket_text}", examples)
         ```
     """
+    resolved_model_alias = _resolve_model_alias(model_alias)
     return Column._from_logical_expr(
         SemanticPredExpr(
             instruction,
             examples=examples,
-            model_alias=model_alias,
+            model_alias=resolved_model_alias,
             temperature=temperature,
         )
     )
@@ -228,10 +234,10 @@ def predicate(
 
 @validate_call(config=ConfigDict(strict=True))
 def reduce(
-        instruction: str,
-        model_alias: Optional[str] = None,
-        temperature: float = 0,
-        max_output_tokens: int = 512,
+    instruction: str,
+    model_alias: Optional[Union[str, ModelAlias]] = None,
+    temperature: float = 0,
+    max_output_tokens: int = 512,
 ) -> Column:
     """Aggregate function: reduces a set of strings across columns into a single string using a natural language instruction.
 
@@ -256,11 +262,12 @@ def reduce(
         semantic.reduce("Summarize these documents using each document's title: {title} and body: {body}.")
         ```
     """
+    resolved_model_alias = _resolve_model_alias(model_alias)
     return Column._from_logical_expr(
         SemanticReduceExpr(
             instruction,
             max_tokens=max_output_tokens,
-            model_alias=model_alias,
+            model_alias=resolved_model_alias,
             temperature=temperature,
         )
     )
@@ -268,11 +275,11 @@ def reduce(
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
 def classify(
-        column: ColumnOrName,
-        classes: Union[List[str], List[ClassDefinition]],
-        examples: Optional[ClassifyExampleCollection] = None,
-        model_alias: Optional[str] = None,
-        temperature: float = 0,
+    column: ColumnOrName,
+    classes: Union[List[str], List[ClassDefinition]],
+    examples: Optional[ClassifyExampleCollection] = None,
+    model_alias: Optional[Union[str, ModelAlias]] = None,
+    temperature: float = 0,
 ) -> Column:
     """Classifies a string column into one of the provided classes.
 
@@ -334,7 +341,8 @@ def classify(
 
     # Validate unique labels
     if isinstance(classes[0], ClassDefinition):
-        classes = [ResolvedClassDefinition(label=class_def.label, description=class_def.description) for class_def in classes]
+        classes = [ResolvedClassDefinition(label=class_def.label, description=class_def.description) for class_def in
+                   classes]
     else:
         classes = [ResolvedClassDefinition(label=class_def, description=None) for class_def in classes]
 
@@ -345,12 +353,13 @@ def classify(
             f"Class labels must be unique. The following duplicate label(s) were found: {sorted(duplicates)}"
         )
 
+    resolved_model_alias = _resolve_model_alias(model_alias)
     return Column._from_logical_expr(
         SemanticClassifyExpr(
             Column._from_col_or_name(column)._logical_expr,
             classes,
             examples=examples,
-            model_alias=model_alias,
+            model_alias=resolved_model_alias,
             temperature=temperature,
         )
     )
@@ -358,9 +367,9 @@ def classify(
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
 def analyze_sentiment(
-        column: ColumnOrName,
-        model_alias: Optional[str] = None,
-        temperature: float = 0,
+    column: ColumnOrName,
+    model_alias: Optional[Union[str, ModelAlias]] = None,
+    temperature: float = 0,
 ) -> Column:
     """Analyzes the sentiment of a string column. Returns one of 'positive', 'negative', or 'neutral'.
 
@@ -380,10 +389,11 @@ def analyze_sentiment(
         semantic.analyze_sentiment(col('user_comment'))
         ```
     """
+    resolved_model_alias = _resolve_model_alias(model_alias)
     return Column._from_logical_expr(
         AnalyzeSentimentExpr(
             Column._from_col_or_name(column)._logical_expr,
-            model_alias=model_alias,
+            model_alias=resolved_model_alias,
             temperature=temperature,
         )
     )
@@ -392,7 +402,7 @@ def analyze_sentiment(
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
 def embed(
     column: ColumnOrName,
-    model_alias: Optional[str] = None,
+    model_alias: Optional[Union[str, ModelAlias]] = None,
 ) -> Column:
     """Generate embeddings for the specified string column.
 
@@ -413,16 +423,18 @@ def embed(
         df.select(semantic.embed(col("text_column")).alias("text_embeddings"))
         ```
     """
+    resolved_model_alias = _resolve_model_alias(model_alias)
     return Column._from_logical_expr(
-        EmbeddingsExpr(Column._from_col_or_name(column)._logical_expr, model_alias=model_alias)
+        EmbeddingsExpr(Column._from_col_or_name(column)._logical_expr, model_alias=resolved_model_alias)
     )
+
 
 @validate_call(config=ConfigDict(strict=True, arbitrary_types_allowed=True))
 def summarize(
     column: ColumnOrName,
     format: Union[KeyPoints, Paragraph, None] = None,
     temperature: float = 0,
-    model_alias: Optional[str] = None
+    model_alias: Optional[Union[str, ModelAlias]] = None
 ) -> Column:
     """Summarizes strings from a column.
 
@@ -442,6 +454,8 @@ def summarize(
     """
     if format is None:
         format = Paragraph()
+    resolved_model_alias = _resolve_model_alias(model_alias)
     return Column._from_logical_expr(
-        SemanticSummarizeExpr(Column._from_col_or_name(column)._logical_expr, format, temperature, model_alias=model_alias)
+        SemanticSummarizeExpr(Column._from_col_or_name(column)._logical_expr, format, temperature,
+                              model_alias=resolved_model_alias)
     )

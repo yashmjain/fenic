@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional, Union
 
 from pydantic import BaseModel
 
+from fenic.core._logical_plan.resolved_types import (
+    ResolvedClassDefinition,
+    ResolvedModelAlias,
+)
 from fenic.core._logical_plan.utils import validate_completion_parameters
 from fenic.core.types import (
     ClassifyExampleCollection,
@@ -18,7 +21,7 @@ from fenic.core.types.datatypes import StringType
 if TYPE_CHECKING:
     from fenic.core._logical_plan import LogicalPlan
 import fenic.core._utils.misc as utils
-from fenic._inference.model_catalog import (
+from fenic.core._inference.model_catalog import (
     ModelProvider,
     model_catalog,
 )
@@ -39,6 +42,7 @@ from fenic.core.types import (
     EmbeddingType,
 )
 from fenic.core.types.schema import ColumnField
+from fenic.core.types.semantic import ModelAlias
 
 
 class SemanticMapExpr(ValidatedDynamicSignature, SemanticExpr):
@@ -49,7 +53,7 @@ class SemanticMapExpr(ValidatedDynamicSignature, SemanticExpr):
         instruction: str,
         max_tokens: int,
         temperature: float,
-        model_alias: Optional[str] = None,
+        model_alias: Optional[ResolvedModelAlias] = None,
         response_format: Optional[type[BaseModel]] = None,
         examples: Optional[MapExampleCollection] = None,
     ):
@@ -132,7 +136,7 @@ class SemanticExtractExpr(ValidatedDynamicSignature, SemanticExpr):
         schema: type[BaseModel],
         max_tokens: int,
         temperature: float,
-        model_alias: Optional[str] = None,
+        model_alias: Optional[ResolvedModelAlias] = None,
     ):
         self.expr = expr
         self.max_tokens = max_tokens
@@ -185,7 +189,7 @@ class SemanticPredExpr(ValidatedSignature, SemanticExpr):
         self,
         instruction: str,
         temperature: float,
-        model_alias: Optional[str] = None,
+        model_alias: Optional[ResolvedModelAlias] = None,
         examples: Optional[PredicateExampleCollection] = None,
     ):
         self.instruction = instruction
@@ -241,7 +245,7 @@ class SemanticReduceExpr(ValidatedSignature, SemanticExpr, AggregateExpr):
         instruction: str,
         max_tokens: int,
         temperature: float,
-        model_alias: Optional[str] = None,
+        model_alias: Optional[ResolvedModelAlias] = None,
     ):
         self.instruction = instruction
         self.exprs = [
@@ -290,11 +294,6 @@ class SemanticReduceExpr(ValidatedSignature, SemanticExpr, AggregateExpr):
         return f"semantic.reduce_{instruction_hash}({exprs_str})"
 
 
-@dataclass
-class ResolvedClassDefinition():
-    label: str
-    description: Optional[str] = None
-
 class SemanticClassifyExpr(ValidatedSignature, SemanticExpr):
     function_name = "semantic.classify"
 
@@ -304,7 +303,7 @@ class SemanticClassifyExpr(ValidatedSignature, SemanticExpr):
         classes: List[ResolvedClassDefinition],
         temperature: float,
         examples: Optional[ClassifyExampleCollection] = None,
-        model_alias: Optional[str] = None,
+        model_alias: Optional[ResolvedModelAlias] = None,
     ):
         self.expr = expr
         self.classes = classes
@@ -353,7 +352,7 @@ class AnalyzeSentimentExpr(ValidatedSignature, SemanticExpr):
         self,
         expr: LogicalExpr,
         temperature: float,
-        model_alias: Optional[str] = None,
+        model_alias: Optional[ResolvedModelAlias] = None,
     ):
         self.expr = expr
         self.temperature = temperature
@@ -469,7 +468,7 @@ class SemanticSummarizeExpr(ValidatedSignature, SemanticExpr):
         expr: LogicalExpr,
         format: Union[KeyPoints, Paragraph],
         temperature: float,
-        model_alias: Optional[str] = None
+        model_alias: Optional[ModelAlias] = None
     ):
         self.expr = expr
         self.format = format

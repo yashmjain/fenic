@@ -8,18 +8,19 @@ import pytest
 import requests
 
 from fenic import (
-    GoogleVertexModelConfig,
+    GoogleVertexLanguageModel,
+    OpenAIEmbeddingModel,
     SemanticConfig,
     Session,
     SessionConfig,
     configure_logging,
 )
-from fenic._inference.model_catalog import ModelProvider
 from fenic.api.session.config import (
-    AnthropicModelConfig,
-    GoogleGLAModelConfig,
-    OpenAIModelConfig,
+    AnthropicLanguageModel,
+    GoogleDeveloperLanguageModel,
+    OpenAILanguageModel,
 )
+from fenic.core._inference.model_catalog import ModelProvider, model_catalog
 
 MODEL_NAME_ARG = "--model-name"
 
@@ -128,13 +129,13 @@ def pytest_addoption(parser):
 @pytest.fixture
 def examples_session_config(app_name) -> SessionConfig:
     """Creates a test session config."""
-    embedding_model = OpenAIModelConfig(
+    embedding_model = OpenAIEmbeddingModel(
         model_name="text-embedding-3-small",
         rpm=3000,
         tpm=1_000_000
     )
     # limits are small so we can run the examples in parallel
-    flash_lite_model = GoogleGLAModelConfig(
+    flash_lite_model = GoogleDeveloperLanguageModel(
         model_name="gemini-2.0-flash-lite",
         rpm=500,
         tpm=250_000,
@@ -153,7 +154,7 @@ def examples_session_config(app_name) -> SessionConfig:
 def multi_model_local_session_config(app_name, request) -> SessionConfig:
     """Creates a test session config."""
     model_provider = ModelProvider(request.config.getoption(MODEL_PROVIDER_ARG))
-    nano = OpenAIModelConfig(
+    nano = OpenAILanguageModel(
                 model_name="gpt-4.1-nano",
                 rpm=250,
                 tpm=50_000
@@ -163,7 +164,7 @@ def multi_model_local_session_config(app_name, request) -> SessionConfig:
     if model_provider == ModelProvider.OPENAI:
         language_models = {
             "model_1": nano,
-            "model_2": OpenAIModelConfig(
+            "model_2": OpenAILanguageModel(
                 model_name="gpt-4.1-mini",
                 rpm=250,
                 tpm=50_000
@@ -172,17 +173,17 @@ def multi_model_local_session_config(app_name, request) -> SessionConfig:
     elif model_provider == ModelProvider.ANTHROPIC:
         language_models = {
             "model_1": nano,
-            "model_2" : AnthropicModelConfig(
-                model_name="claude-3-5-haiku-latest",
+            "model_2" : AnthropicLanguageModel(
+                model_name=request.config.getoption(MODEL_NAME_ARG),
                 rpm=500,
                 input_tpm=50_000,
                 output_tpm=20_000,
             )
         }
-    elif model_provider == ModelProvider.GOOGLE_GLA:
+    elif model_provider == ModelProvider.GOOGLE_DEVELOPER:
         language_models = {
             "model_1": nano,
-            "model_2" : GoogleGLAModelConfig(
+            "model_2" : GoogleDeveloperLanguageModel(
                 model_name=request.config.getoption(MODEL_NAME_ARG),
                 rpm=1000,
                 tpm=500_000,
@@ -191,7 +192,7 @@ def multi_model_local_session_config(app_name, request) -> SessionConfig:
     elif model_provider == ModelProvider.GOOGLE_VERTEX:
         language_models = {
             "model_1": nano,
-            "model_2" : GoogleVertexModelConfig(
+            "model_2" : GoogleVertexLanguageModel(
                 model_name=request.config.getoption(MODEL_NAME_ARG),
                 rpm=1000,
                 tpm=500_000,
@@ -199,7 +200,7 @@ def multi_model_local_session_config(app_name, request) -> SessionConfig:
         }
     else:
         raise ValueError(f"Unsupported model provider: {model_provider}")
-    embedding_model = OpenAIModelConfig(
+    embedding_model = OpenAIEmbeddingModel(
         model_name="text-embedding-3-small",
         rpm=3000,
         tpm=1_000_000
@@ -229,35 +230,123 @@ def multi_model_local_session(multi_model_local_session_config, request):
 def local_session_config(app_name, request) -> SessionConfig:
     """Creates a test session config."""
     model_provider = ModelProvider(request.config.getoption(MODEL_PROVIDER_ARG))
+    model_name = request.config.getoption(MODEL_NAME_ARG)
+    model_parameters = model_catalog.get_completion_model_parameters(model_provider, model_name)
     # these limits are purposely low so we don't consume our entire project limit while running multiple tests in multiple branches
     if model_provider == ModelProvider.OPENAI:
-        language_model = OpenAIModelConfig(
-            model_name=request.config.getoption(MODEL_NAME_ARG),
-            rpm=500,
-            tpm=100_000
-        )
+        if model_parameters.supports_reasoning:
+            language_model = OpenAILanguageModel(
+                model_name=model_name,
+                rpm=500,
+                tpm=100_000,
+                profiles= {
+                    "low": OpenAILanguageModel.Profile(
+                        reasoning_effort="low"
+                    ),
+                    "medium" : OpenAILanguageModel.Profile(
+                        reasoning_effort="medium"
+                    ),
+                    "high" : OpenAILanguageModel.Profile(
+                        reasoning_effort="high"
+                    )
+                },
+                default_profile="medium"
+            )
+        else:
+            language_model = OpenAILanguageModel(
+                model_name=model_name,
+                rpm=500,
+                tpm=100_000,
+            )
     elif model_provider == ModelProvider.ANTHROPIC:
-        language_model = AnthropicModelConfig(
-            model_name=request.config.getoption(MODEL_NAME_ARG),
-            rpm=500,
-            input_tpm=50_000,
-            output_tpm=10_000,
-        )
-    elif model_provider == ModelProvider.GOOGLE_GLA:
-        language_model = GoogleGLAModelConfig(
-            model_name=request.config.getoption(MODEL_NAME_ARG),
-            rpm=1000,
-            tpm=500_000,
-        )
+        if model_parameters.supports_reasoning:
+            language_model = AnthropicLanguageModel(
+                model_name=model_name,
+                rpm=500,
+                input_tpm=100_000,
+                output_tpm=75_000,
+                profiles= {
+                    "thinking_disabled": AnthropicLanguageModel.Profile(),
+                    "low": AnthropicLanguageModel.Profile(
+                        thinking_token_budget=1024
+                    ),
+                    "medium" : AnthropicLanguageModel.Profile(
+                        thinking_token_budget=4096
+                    ),
+                    "high": AnthropicLanguageModel.Profile(
+                        thinking_token_budget=8192
+                    )
+                },
+                default_profile="low"
+            )
+        else:
+            language_model = AnthropicLanguageModel(
+                model_name=model_name,
+                rpm=500,
+                input_tpm=100_000,
+                output_tpm=75_000,
+            )
+    elif model_provider == ModelProvider.GOOGLE_DEVELOPER:
+        if model_parameters.supports_reasoning:
+            language_model = GoogleDeveloperLanguageModel(
+                model_name=model_name,
+                rpm=1000,
+                tpm=500_000,
+                profiles= {
+                    "thinking_disabled": GoogleDeveloperLanguageModel.Profile(),
+                    "auto": GoogleDeveloperLanguageModel.Profile(
+                        thinking_token_budget=-1
+                    ),
+                    "low": GoogleDeveloperLanguageModel.Profile(
+                        thinking_token_budget=1024
+                    ),
+                    "medium" : GoogleDeveloperLanguageModel.Profile(
+                        thinking_token_budget=4096
+                    ),
+                    "high": GoogleDeveloperLanguageModel.Profile(
+                        thinking_token_budget=8192
+                    )
+                },
+                default_profile="auto"
+            )
+        else:
+            language_model = GoogleDeveloperLanguageModel(
+                model_name=model_name,
+                rpm=1000,
+                tpm=500_000,
+            )
     elif model_provider == ModelProvider.GOOGLE_VERTEX:
-        language_model = GoogleVertexModelConfig(
-            model_name=request.config.getoption(MODEL_NAME_ARG),
-            rpm=1000,
-            tpm=500_000,
-        )
+        if model_parameters.supports_reasoning:
+            language_model = GoogleVertexLanguageModel(
+                model_name=model_name,
+                rpm=1000,
+                tpm=500_000,
+                profiles={
+                    "thinking_disabled": GoogleVertexLanguageModel.Profile(),
+                    "auto": GoogleVertexLanguageModel.Profile(
+                        thinking_token_budget=-1
+                    ),
+                    "low": GoogleVertexLanguageModel.Profile(
+                        thinking_token_budget=1024
+                    ),
+                    "medium": GoogleVertexLanguageModel.Profile(
+                        thinking_token_budget=4096
+                    ),
+                    "high": GoogleVertexLanguageModel.Profile(
+                        thinking_token_budget=8192
+                    )
+                },
+                default_profile="auto"
+            )
+        else:
+            language_model = GoogleVertexLanguageModel(
+                model_name=model_name,
+                rpm=1000,
+                tpm=500_000,
+            )
     else:
         raise ValueError(f"Unsupported model provider: {model_provider}")
-    embedding_model = OpenAIModelConfig(
+    embedding_model = OpenAIEmbeddingModel(
         model_name="text-embedding-3-small",
         rpm=3000,
         tpm=1_000_000
