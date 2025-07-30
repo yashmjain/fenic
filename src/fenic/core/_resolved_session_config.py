@@ -34,6 +34,9 @@ class ResolvedAnthropicModelProfile:
 @dataclass
 class ResolvedGoogleModelProfile:
     thinking_token_budget: Optional[int] = None
+    embedding_dimensionality: Optional[int] = None
+    embedding_task_type: Optional[str] = None
+
 
 
 @dataclass
@@ -45,6 +48,7 @@ class ResolvedOpenAIModelConfig:
     model_name: str
     rpm: int
     tpm: int
+    model_provider: ModelProvider = ModelProvider.OPENAI
     profiles: Optional[dict[str, ResolvedOpenAIModelProfile]] = None
     default_profile: Optional[str] = None
 
@@ -55,6 +59,7 @@ class ResolvedAnthropicModelConfig:
     rpm: int
     input_tpm: int
     output_tpm: int
+    model_provider: ModelProvider = ModelProvider.ANTHROPIC
     profiles: Optional[dict[str, ResolvedAnthropicModelProfile]] = None
     default_profile: Optional[str] = None
 
@@ -84,7 +89,7 @@ class ResolvedLanguageModelConfig:
 
 @dataclass
 class ResolvedEmbeddingModelConfig:
-    model_configs: dict[str, ResolvedOpenAIModelConfig]
+    model_configs: dict[str, ResolvedModelConfig]
     default_model: str
 
 @dataclass

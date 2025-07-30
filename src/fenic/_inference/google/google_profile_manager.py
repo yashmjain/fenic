@@ -1,15 +1,22 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from google.genai.types import GenerateContentConfigDict, ThinkingConfigDict
+from google.genai.types import (
+    EmbedContentConfigDict,
+    GenerateContentConfigDict,
+    ThinkingConfigDict,
+)
 
 from fenic._inference.profile_manager import BaseProfileConfiguration, ProfileManager
-from fenic.core._inference.model_catalog import CompletionModelParameters
+from fenic.core._inference.model_catalog import (
+    CompletionModelParameters,
+    EmbeddingModelParameters,
+)
 from fenic.core._resolved_session_config import ResolvedGoogleModelProfile
 
 
 @dataclass
-class GoogleCompletionsProfileConfiguration(BaseProfileConfiguration):
+class GoogleCompletionsProfileConfig(BaseProfileConfiguration):
     """Configuration for Google Gemini model profiles.
 
     Attributes:
@@ -21,8 +28,41 @@ class GoogleCompletionsProfileConfiguration(BaseProfileConfiguration):
     thinking_token_budget: int = 0
     additional_generation_config: GenerateContentConfigDict = field(default_factory=GenerateContentConfigDict)
 
+@dataclass
+class GoogleEmbeddingsProfileConfig(BaseProfileConfiguration):
+    """Configuration for Google Gemini embeddings model profiles."""
+    additional_embedding_config: EmbedContentConfigDict = field(default_factory=EmbedContentConfigDict)
 
-class GoogleCompletionsProfileManager(ProfileManager[ResolvedGoogleModelProfile, GoogleCompletionsProfileConfiguration]):
+class GoogleEmbeddingsProfileManager(ProfileManager[ResolvedGoogleModelProfile, GoogleEmbeddingsProfileConfig]):
+
+    def __init__(
+        self,
+        model_parameters: EmbeddingModelParameters,
+        profiles: Optional[dict[str, ResolvedGoogleModelProfile]] = None,
+        default_profile_name: Optional[str] = None,
+    ):
+        self.model_parameters = model_parameters
+        super().__init__(profiles, default_profile_name)
+
+
+    def _process_profile(self, profile: ResolvedGoogleModelProfile) -> GoogleEmbeddingsProfileConfig:
+        config_dict = EmbedContentConfigDict()
+        if profile.embedding_dimensionality:
+            config_dict["output_dimensionality"] = profile.embedding_dimensionality
+
+        if profile.embedding_task_type:
+            config_dict["task_type"] = profile.embedding_task_type
+
+        return GoogleEmbeddingsProfileConfig(
+           additional_embedding_config=config_dict,
+        )
+
+    def get_default_profile(self) -> GoogleEmbeddingsProfileConfig:
+        return GoogleEmbeddingsProfileConfig()
+
+
+
+class GoogleCompletionsProfileManager(ProfileManager[ResolvedGoogleModelProfile, GoogleCompletionsProfileConfig]):
     """Manages Google-specific profile configurations.
 
     This class handles the conversion of Fenic profile configurations to
@@ -45,7 +85,7 @@ class GoogleCompletionsProfileManager(ProfileManager[ResolvedGoogleModelProfile,
         self.model_parameters = model_parameters
         super().__init__(profile_configurations, default_profile_name)
 
-    def _process_profile(self, profile: ResolvedGoogleModelProfile) -> GoogleCompletionsProfileConfiguration:
+    def _process_profile(self, profile: ResolvedGoogleModelProfile) -> GoogleCompletionsProfileConfig:
         """Process Google profile configuration.
 
         Converts a Fenic profile configuration to a Google-specific configuration,
@@ -85,20 +125,20 @@ class GoogleCompletionsProfileManager(ProfileManager[ResolvedGoogleModelProfile,
                     # Dynamic budget - approximate with default value
                     expected_thinking_tokens = 16384
 
-        return GoogleCompletionsProfileConfiguration(
+        return GoogleCompletionsProfileConfig(
             thinking_enabled=thinking_enabled,
             thinking_token_budget=expected_thinking_tokens,
             additional_generation_config=additional_generation_config
         )
 
-    def get_default_profile(self) -> GoogleCompletionsProfileConfiguration:
+    def get_default_profile(self) -> GoogleCompletionsProfileConfig:
         """Get default Google configuration.
 
         Returns:
             Default configuration with thinking disabled
         """
         if self.model_parameters.supports_reasoning:
-            return GoogleCompletionsProfileConfiguration(
+            return GoogleCompletionsProfileConfig(
                 thinking_enabled=False,
                 thinking_token_budget=0,
                 additional_generation_config=GenerateContentConfigDict(
@@ -108,4 +148,4 @@ class GoogleCompletionsProfileManager(ProfileManager[ResolvedGoogleModelProfile,
                     )
                 )
             )
-        return GoogleCompletionsProfileConfiguration()
+        return GoogleCompletionsProfileConfig()

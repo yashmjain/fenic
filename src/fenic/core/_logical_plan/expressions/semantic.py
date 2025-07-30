@@ -9,6 +9,9 @@ from fenic.core._logical_plan.resolved_types import (
     ResolvedModelAlias,
 )
 from fenic.core._logical_plan.utils import validate_completion_parameters
+from fenic.core._resolved_session_config import (
+    ResolvedGoogleModelConfig,
+)
 from fenic.core.types import (
     ClassifyExampleCollection,
     KeyPoints,
@@ -22,7 +25,6 @@ if TYPE_CHECKING:
     from fenic.core._logical_plan import LogicalPlan
 import fenic.core._utils.misc as utils
 from fenic.core._inference.model_catalog import (
-    ModelProvider,
     model_catalog,
 )
 from fenic.core._interfaces.session_state import BaseSessionState
@@ -118,7 +120,7 @@ class SemanticMapExpr(ValidatedDynamicSignature, SemanticExpr):
             self.model_alias,
             session_state.session_config,
             self.temperature,
-            self.max_tokens
+            self.max_tokens,
         )
 
     def __str__(self):
@@ -174,10 +176,12 @@ class SemanticExtractExpr(ValidatedDynamicSignature, SemanticExpr):
             self.model_alias,
             session_state.session_config,
             self.temperature,
-            self.max_tokens
+            self.max_tokens,
         )
 
-    def _infer_dynamic_return_type(self, arg_types: List[DataType], plan: LogicalPlan, session_state: BaseSessionState) -> DataType:
+    def _infer_dynamic_return_type(
+        self, arg_types: List[DataType], plan: LogicalPlan
+    , session_state: BaseSessionState) -> DataType:
         """Return StructType based on the schema."""
         return convert_pydantic_type_to_custom_struct_type(self.schema)
 
@@ -234,7 +238,9 @@ class SemanticPredExpr(ValidatedSignature, SemanticExpr):
 
     def _validate_completion_parameters(self, plan: LogicalPlan, session_state: BaseSessionState):
         """Validate completion parameters (no max_tokens for predicate)."""
-        validate_completion_parameters(self.model_alias, session_state.session_config, self.temperature)
+        validate_completion_parameters(
+            self.model_alias, session_state.session_config, self.temperature
+        )
 
 
 class SemanticReduceExpr(ValidatedSignature, SemanticExpr, AggregateExpr):
@@ -285,7 +291,7 @@ class SemanticReduceExpr(ValidatedSignature, SemanticExpr, AggregateExpr):
             self.model_alias,
             session_state.session_config,
             self.temperature,
-            self.max_tokens
+            self.max_tokens,
         )
 
     def __str__(self):
@@ -336,7 +342,9 @@ class SemanticClassifyExpr(ValidatedSignature, SemanticExpr):
 
     def _validate_completion_parameters(self, plan: LogicalPlan, session_state: BaseSessionState):
         """Validate completion parameters (called after signature validation)."""
-        validate_completion_parameters(self.model_alias, session_state.session_config, self.temperature)
+        validate_completion_parameters(
+            self.model_alias, session_state.session_config, self.temperature
+        )
 
     def to_column_field(self, plan: LogicalPlan, session_state: BaseSessionState) -> ColumnField:
         """Handle signature validation and completion parameter validation."""
@@ -344,6 +352,7 @@ class SemanticClassifyExpr(ValidatedSignature, SemanticExpr):
         self._validate_completion_parameters(plan, session_state)
         # Use mixin's implementation
         return super().to_column_field(plan, session_state)
+
 
 class AnalyzeSentimentExpr(ValidatedSignature, SemanticExpr):
     function_name = "semantic.analyze_sentiment"
@@ -382,7 +391,9 @@ class AnalyzeSentimentExpr(ValidatedSignature, SemanticExpr):
 
     def _validate_completion_parameters(self, plan: LogicalPlan, session_state: BaseSessionState):
         """Validate completion parameters (no max_tokens for analyze_sentiment)."""
-        validate_completion_parameters(self.model_alias, session_state.session_config, self.temperature)
+        validate_completion_parameters(
+            self.model_alias, session_state.session_config, self.temperature
+        )
 
 
 class EmbeddingsExpr(ValidatedDynamicSignature, SemanticExpr):
@@ -394,7 +405,7 @@ class EmbeddingsExpr(ValidatedDynamicSignature, SemanticExpr):
 
     function_name = "semantic.embed"
 
-    def __init__(self, expr: LogicalExpr, model_alias: Optional[str] = None):
+    def __init__(self, expr: LogicalExpr, model_alias: Optional[ResolvedModelAlias] = None):
         self.expr = expr
         self.model_alias = model_alias
         self.dimensions = None
@@ -421,7 +432,9 @@ class EmbeddingsExpr(ValidatedDynamicSignature, SemanticExpr):
     def __str__(self) -> str:
         return f"semantic.embed({self.expr}, {self.model_alias})"
 
-    def _infer_dynamic_return_type(self, arg_types: List[DataType], plan: LogicalPlan, session_state: BaseSessionState) -> DataType:
+    def _infer_dynamic_return_type(
+        self, arg_types: List[DataType], plan: LogicalPlan
+    , session_state: BaseSessionState) -> DataType:
         """Return EmbeddingType with specific dimensions based on model."""
         return_type = self._get_embedding_type_from_config(plan, session_state)
         return return_type
@@ -437,22 +450,42 @@ class EmbeddingsExpr(ValidatedDynamicSignature, SemanticExpr):
                 "Please add embedding_models to your SemanticConfig."
             )
         embedding_model_configs = semantic_config.embedding_models
-        model_alias = self.model_alias or embedding_model_configs.default_model
-        if model_alias not in embedding_model_configs.model_configs:
-            available = ', '.join(embedding_model_configs.model_configs.keys())
+        model_alias = self.model_alias or ResolvedModelAlias(
+            name=embedding_model_configs.default_model
+        )
+        if model_alias.name not in embedding_model_configs.model_configs:
+            available = ", ".join(embedding_model_configs.model_configs.keys())
             raise ValidationError(
                 f"Embedding model alias '{model_alias}' not found in SessionConfig. "
                 f"Available models: {available}"
             )
 
-        model_config = embedding_model_configs.model_configs[model_alias]
-        model_provider = ModelProvider.OPENAI
+        model_config = embedding_model_configs.model_configs[model_alias.name]
+        model_provider = model_config.model_provider
         model_name = model_config.model_name
-        embedding_params = model_catalog.get_embedding_model_parameters(model_provider, model_name)
-        self.dimensions = embedding_params.output_dimensions
+        embedding_params = model_catalog.get_embedding_model_parameters(
+            model_provider, model_name
+        )
+        if isinstance(model_config, ResolvedGoogleModelConfig):
+            profile_name = model_alias.profile if model_alias.profile else model_config.default_profile
+            if profile_name not in model_config.profiles:
+                raise ValidationError(
+                    f"Embedding model preset '{model_alias.profile}' not found in SessionConfig."
+                    f" Available presets for {model_alias.name}: {', '.join(model_config.profiles)}"
+                )
+            profile = model_config.profiles[profile_name]
+
+            self.dimensions = (
+                profile.embedding_dimensionality
+                if profile.embedding_dimensionality
+                else embedding_params.default_dimensions
+            )
+        else:
+            self.dimensions = embedding_params.default_dimensions
+
         return EmbeddingType(
             embedding_model=f"{model_provider.value}/{model_name}",
-            dimensions=embedding_params.output_dimensions
+            dimensions=self.dimensions,
         )
 
     def _validate_completion_parameters(self, plan: LogicalPlan, session_state: BaseSessionState):
@@ -468,7 +501,7 @@ class SemanticSummarizeExpr(ValidatedSignature, SemanticExpr):
         expr: LogicalExpr,
         format: Union[KeyPoints, Paragraph],
         temperature: float,
-        model_alias: Optional[ModelAlias] = None
+        model_alias: Optional[ModelAlias] = None,
     ):
         self.expr = expr
         self.format = format
@@ -496,7 +529,9 @@ class SemanticSummarizeExpr(ValidatedSignature, SemanticExpr):
 
     def _validate_completion_parameters(self, plan: LogicalPlan, session_state: BaseSessionState):
         """Validate completion parameters."""
-        validate_completion_parameters(self.model_alias, session_state.session_config, self.temperature)
+        validate_completion_parameters(
+            self.model_alias, session_state.session_config, self.temperature
+        )
 
     def __str__(self) -> str:
         return f"semantic.summarize({self.expr})"

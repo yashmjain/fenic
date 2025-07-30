@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
 from fenic.core._inference.model_catalog import (
     AnthropicLanguageModelName,
+    EmbeddingModelParameters,
     GoogleDeveloperLanguageModelName,
     GoogleVertexLanguageModelName,
     ModelProvider,
@@ -42,6 +43,92 @@ profiles_desc = """
 default_profiles_desc = """
             If profiles are configured, which should be used by default?
         """
+
+GoogleEmbeddingTaskType = Literal[
+            "SEMANTIC_SIMILARITY",
+            "CLASSIFICATION",
+            "CLUSTERING",
+            "RETRIEVAL_DOCUMENT",
+            "RETRIEVAL_QUERY",
+            "CODE_RETRIEVAL_QUERY",
+            "QUESTION_ANSWERING",
+            "FACT_VERIFICATION"
+]
+
+class GoogleDeveloperEmbeddingModel(BaseModel):
+    """Configuration for Google Developer embedding models.
+
+    This class defines the configuration settings for Google embedding models available in Google Developer AI Studio,
+    including model selection and rate limiting parameters. These models are accessible using a GOOGLE_API_KEY environment variable.
+
+    Attributes:
+        model_name: The name of the Google Developer embedding model to use.
+        rpm: Requests per minute limit; must be greater than 0.
+        tpm: Tokens per minute limit; must be greater than 0.
+        profiles: Optional mapping of profile names to profile configurations.
+        default_profile: The name of the default profile to use if profiles are configured.
+
+    Example:
+        Configuring a Google Developer embedding model with rate limits:
+
+        ```python
+        config = GoogleDeveloperEmbeddingModelConfig(
+            model_name="gemini-embedding-001",
+            rpm=100,
+            tpm=1000
+        )
+        ```
+
+        Configuring a Google Developer embedding model with profiles:
+
+        ```python
+        config = GoogleDeveloperEmbeddingModelConfig(
+            model_name="gemini-embedding-001",
+            rpm=100,
+            tpm=1000,
+            profiles={
+                "default": GoogleDeveloperEmbeddingModelConfig.Profile(),
+                "high_dim": GoogleDeveloperEmbeddingModelConfig.Profile(output_dimensionality=3072)
+            },
+            default_profile="default"
+        )
+        ```
+    """
+    model_name: str
+    model_provider: ModelProvider = Field(default=ModelProvider.GOOGLE_DEVELOPER)
+    rpm: int = Field(..., gt=0, description="Requests per minute; must be > 0")
+    tpm: int = Field(..., gt=0, description="Tokens per minute; must be > 0")
+    profiles: Optional[dict[str, Profile]] = Field(default=None, description=profiles_desc)
+    default_profile: Optional[str] = Field(default=None, description=default_profiles_desc)
+
+    class Profile(BaseModel):
+        """Profile configurations for Google Developer embedding models.
+
+        This class defines profile configurations for Google embedding models, allowing
+        different output dimensionality and task type settings to be applied to the same model.
+
+        Attributes:
+            output_dimensionality: The dimensionality of the embedding created by this model.
+                If not provided, the model will use its default dimensionality.
+            task_type: The type of task for the embedding model.
+
+        Example:
+            Configuring a profile with custom dimensionality:
+
+            ```python
+            profile = GoogleDeveloperEmbeddingModelConfig.Profile(output_dimensionality=3072)
+            ```
+
+            Configuring a profile with default settings:
+
+            ```python
+            profile = GoogleDeveloperEmbeddingModelConfig.Profile()
+            ```
+        """
+        output_dimensionality: Optional[int] = Field(default=None, gt=0, le=3072, description="Dimensionality of the embedding created by this model")
+        task_type: GoogleEmbeddingTaskType = Field(default="SEMANTIC_SIMILARITY", description="Type of the task")
+
+
 
 class GoogleDeveloperLanguageModel(BaseModel):
     """Configuration for Gemini models accessible through Google Developer AI Studio.
@@ -127,6 +214,80 @@ class GoogleDeveloperLanguageModel(BaseModel):
             default=None, description="The thinking budget in tokens.", ge=-1, lt=32768
         )
 
+class GoogleVertexEmbeddingModel(BaseModel):
+    """Configuration for Google Vertex AI embedding models.
+
+    This class defines the configuration settings for Google embedding models available in Google Vertex AI,
+    including model selection and rate limiting parameters. These models are accessible using Google Cloud credentials.
+
+    Attributes:
+        model_name: The name of the Google Vertex embedding model to use.
+        rpm: Requests per minute limit; must be greater than 0.
+        tpm: Tokens per minute limit; must be greater than 0.
+        profiles: Optional mapping of profile names to profile configurations.
+        default_profile: The name of the default profile to use if profiles are configured.
+
+    Example:
+        Configuring a Google Vertex embedding model with rate limits:
+
+        ```python
+        embedding_model = GoogleVertexEmbeddingModel(
+            model_name="gemini-embedding-001",
+            rpm=100,
+            tpm=1000
+        )
+        ```
+
+        Configuring a Google Vertex embedding model with profiles:
+
+        ```python
+        embedding_model = GoogleVertexEmbeddingModel(
+            model_name="gemini-embedding-001",
+            rpm=100,
+            tpm=1000,
+            profiles={
+                "default": GoogleVertexEmbeddingModel.Profile(),
+                "high_dim": GoogleVertexEmbeddingModel.Profile(output_dimensionality=3072)
+            },
+            default_profile="default"
+        )
+        ```
+    """
+    model_name: str
+    model_provider: ModelProvider = Field(default=ModelProvider.GOOGLE_VERTEX)
+    rpm: int = Field(..., gt=0, description="Requests per minute; must be > 0")
+    tpm: int = Field(..., gt=0, description="Tokens per minute; must be > 0")
+    profiles: Optional[dict[str, Profile]] = Field(default=None, description=profiles_desc)
+    default_profile: Optional[str] = Field(default=None, description=default_profiles_desc)
+
+    class Profile(BaseModel):
+        """Profile configurations for Google Vertex embedding models.
+
+        This class defines profile configurations for Google embedding models, allowing
+        different output dimensionality and task type settings to be applied to the same model.
+
+        Attributes:
+            output_dimensionality: The dimensionality of the embedding created by this model.
+                If not provided, the model will use its default dimensionality.
+            task_type: The type of task for the embedding model.
+
+        Example:
+            Configuring a profile with custom dimensionality:
+
+            ```python
+            profile = GoogleVertexEmbeddingModelConfig.Profile(output_dimensionality=3072)
+            ```
+
+            Configuring a profile with default settings:
+
+            ```python
+            profile = GoogleVertexEmbeddingModelConfig.Profile()
+            ```
+        """
+        output_dimensionality: Optional[int] = Field(default=None, gt=0, le=3072, description="Dimensionality of the embedding created by this model")
+        task_type: GoogleEmbeddingTaskType = Field(default="SEMANTIC_SIMILARITY", description="Type of the task")
+
+
 class GoogleVertexLanguageModel(BaseModel):
     """Configuration for Google Vertex AI models.
 
@@ -174,7 +335,7 @@ class GoogleVertexLanguageModel(BaseModel):
     default_profile: Optional[str] = Field(default=None, description=default_profiles_desc)
 
     class Profile(BaseModel):
-        """profile configurations for Google Vertex models.
+        """Profile configurations for Google Vertex models.
 
         This class defines profile configurations for Google Gemini models, allowing
         different thinking/reasoning settings to be applied to the same underlying model.
@@ -431,7 +592,7 @@ class AnthropicLanguageModel(BaseModel):
             ge=1024,
         )
 
-EmbeddingModel = Union[OpenAIEmbeddingModel]
+EmbeddingModel = Union[OpenAIEmbeddingModel, GoogleVertexEmbeddingModel, GoogleDeveloperEmbeddingModel]
 LanguageModel = Union[OpenAILanguageModel, AnthropicLanguageModel, GoogleDeveloperLanguageModel, GoogleVertexLanguageModel]
 ModelConfig = Union[EmbeddingModel, LanguageModel]
 
@@ -558,9 +719,18 @@ class SemanticConfig(BaseModel):
                         model_config.default_profile = profile_names[0]
 
         # Set default embedding model if not set and only one model exists
-        if self.embedding_models is not None and self.default_embedding_model is None and len(
-                self.embedding_models) == 1:
-            self.default_embedding_model = list(self.embedding_models.keys())[0]
+        if self.embedding_models:
+            if self.default_embedding_model is None and len(self.embedding_models) == 1:
+                self.default_embedding_model = list(self.embedding_models.keys())[0]
+            # Set default profile for each model if not set and only one preset exists
+            for model_config in self.embedding_models.values():
+                if hasattr(model_config, "profiles") and model_config.profiles is not None:
+                    preset_names = list(model_config.profiles.keys())
+                    if (
+                        model_config.default_profile is None
+                        and len(preset_names) == 1
+                    ):
+                        model_config.default_profile = preset_names[0]
 
     @model_validator(mode="after")
     def validate_models(self) -> SemanticConfig:
@@ -592,7 +762,7 @@ class SemanticConfig(BaseModel):
 
             for model_alias, language_model in self.language_models.items():
                 language_model_name = language_model.model_name
-                language_model_provider = get_model_provider_for_model_config(language_model)
+                language_model_provider = _get_model_provider_for_model_config(language_model)
 
                 if language_model.profiles is not None:
                     profile_names = list(language_model.profiles.keys())
@@ -621,8 +791,8 @@ class SemanticConfig(BaseModel):
             if self.default_embedding_model is not None and self.default_embedding_model not in self.embedding_models:
                 raise ConfigurationError(
                     f"default_embedding_model {self.default_embedding_model} is not in configured map of embedding models. Available models: {available_embedding_model_aliases} .")
-            for _model_alias, embedding_model in self.embedding_models.items():
-                embedding_model_provider = get_model_provider_for_model_config(embedding_model)
+            for model_alias, embedding_model in self.embedding_models.items():
+                embedding_model_provider = _get_model_provider_for_model_config(embedding_model)
                 embedding_model_name = embedding_model.model_name
                 embedding_model_parameters = model_catalog.get_embedding_model_parameters(embedding_model_provider,
                                                                                           embedding_model_name)
@@ -631,6 +801,18 @@ class SemanticConfig(BaseModel):
                         embedding_model_provider,
                         embedding_model_name
                     ))
+                if hasattr(embedding_model, "profiles") and embedding_model.profiles:
+                    profile_names = list(embedding_model.profiles.keys())
+                    if embedding_model.default_profile is None and len(profile_names) > 0:
+                        raise ConfigurationError(
+                            f"default_profile is not set for model {model_alias}, but multiple profiles are configured. Please specify one of: {profile_names} as a default_profile.")
+                    if embedding_model.default_profile is not None and embedding_model.default_profile not in profile_names:
+                        raise ConfigurationError(
+                            f"default_profile {embedding_model.default_profile} is not in configured profiles for model {model_alias}. Available profiles: {profile_names}")
+
+                    for profile_alias, profile in embedding_model.profiles.items():
+                        _validate_embedding_profile(embedding_model_parameters, profile_alias, profile)
+
 
         return self
 
@@ -781,10 +963,26 @@ class SessionConfig(BaseModel):
                 } if model.profiles else None
                 return ResolvedGoogleModelConfig(
                     model_name=model.model_name,
-                    model_provider=get_model_provider_for_model_config(model),
+                    model_provider=_get_model_provider_for_model_config(model),
                     rpm=model.rpm,
                     tpm=model.tpm,
                     profiles=profiles,
+                    default_profile=model.default_profile,
+                )
+            elif isinstance(model, (GoogleDeveloperEmbeddingModel, GoogleVertexEmbeddingModel)):
+                resolved_profiles = {
+                    profile_name: ResolvedGoogleModelProfile(
+                        embedding_dimensionality=profile.output_dimensionality,
+                        embedding_task_type=profile.task_type,
+                    ) for
+                    profile_name, profile in model.profiles.items()
+                }
+                return ResolvedGoogleModelConfig(
+                    model_name=model.model_name,
+                    model_provider=model.model_provider,
+                    rpm=model.rpm,
+                    tpm=model.tpm,
+                    profiles=resolved_profiles,
                     default_profile=model.default_profile,
                 )
             elif isinstance(model, AnthropicLanguageModel):
@@ -836,13 +1034,25 @@ class SessionConfig(BaseModel):
             cloud=resolved_cloud
         )
 
-def get_model_provider_for_model_config(model_config: ModelConfig) -> ModelProvider:
+def _validate_embedding_profile(
+    embedding_model_parameters: EmbeddingModelParameters,
+    profile_alias: str,
+    profile: EmbeddingModel.Profile
+):
+    """Validate Embedding profile against embedding model parameters."""
+    if hasattr(profile, "output_dimensionality") and not embedding_model_parameters.supports_dimensions(profile.output_dimensionality):
+        raise ConfigurationError(
+            f"The dimensionality of the Embeddings model profile {profile_alias} is invalid."
+            f"Requested dimensionality: {profile.embedding_dimensionality}"
+            f"Available Options: {embedding_model_parameters.get_possible_dimensions()}")
+
+def _get_model_provider_for_model_config(model_config: ModelConfig) -> ModelProvider:
     """Determine the ModelProvider for the given model configuration."""
     if isinstance(model_config, (OpenAILanguageModel, OpenAIEmbeddingModel)):
         return ModelProvider.OPENAI
-    elif isinstance(model_config, GoogleDeveloperLanguageModel):
+    elif isinstance(model_config, (GoogleDeveloperLanguageModel, GoogleDeveloperEmbeddingModel)):
         return ModelProvider.GOOGLE_DEVELOPER
-    elif isinstance(model_config, GoogleVertexLanguageModel):
+    elif isinstance(model_config, (GoogleVertexLanguageModel, GoogleVertexEmbeddingModel)):
         return ModelProvider.GOOGLE_VERTEX
     elif isinstance(model_config, AnthropicLanguageModel):
         return ModelProvider.ANTHROPIC
