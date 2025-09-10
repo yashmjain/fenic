@@ -6,7 +6,7 @@ This MCP server demonstrates Fenic's built-in MCP support, creating parameterize
 
 **Why it matters:** when you’re developing in a codebase the model hasn’t “seen,” you either hand-craft prompts or burn tokens asking vague questions.
 
-Here, the assistant gets a curated, queryable view of the repo and evolves a private memory as you work. Because fenic blends batch semantic processing with cheap non-semantic tools (regex, AST, indexes), you get better answers with fewer tokens and lower latency.
+Here, the assistant gets a curated, queryable view of the repo and evolves as you work. Because fenic blends batch semantic processing with cheap non-semantic tools (regex, AST, indexes), you get better answers with fewer tokens and lower latency.
 
 ## Why this exists
 
@@ -17,7 +17,7 @@ General models are great at Typescript and Python, not your private APIs. This s
 1. Ingest fenic docs + source
 2. Build a fenic knowledge store with fenic pipelines (batch semantic where needed, non-semantic everywhere else)
 3. Expose tools via MCP (search, get_api_tree, etc.)
-4. Your assistant queries, learns, and stores Q&A for next time.
+4. Your assistant queries the documentation to provide accurate answers.
 
 ## Features
 
@@ -81,41 +81,49 @@ If you prefer to run the server locally:
 
 ```bash
   cd /path/to/fenic/examples/mcp/docs-server
-  uv venv
-  source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-  uv pip install fenic[mcp,google]
-  python populate_tables.py
+  uv sync
+  uv run populate_tables.py
 ```
 
-3. **Configure Claude Desktop**:
+3. **Start the MCP server**:
 
-   Edit your Claude Desktop configuration file:
-   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-   - Or specify your custom path: `/path/to/claude_desktop_config.json`
-
-   ```json
-   {
-     "mcpServers": {
-       "fenic-docs": {
-         "command": "/path/to/fenic/examples/mcp/docs-server/.venv/bin/python",
-         "args": ["/path/to/fenic/examples/mcp/docs-server/server.py"],
-         "env": {
-           "GEMINI_API_KEY": "your-gemini-api-key",
-           "FENIC_WORK_DIR": "/path/to/custom/directory"
-         }
-       }
-     }
-   }
+   ```bash
+   cd /path/to/fenic/examples/mcp/docs-server
+   uv run server.py
    ```
 
-4. **Restart Claude Desktop** and the server will be available.
+   The server will start on `http://127.0.0.1:8000`.
+
+4. **Expose the server via HTTPS** (if required by your editor/cli):
+
+   Use ngrok or a similar tunnel service:
+
+   ```bash
+   # Install ngrok if you haven't already (ngrok requires you to have an account)
+   # macOS: brew install ngrok
+   # Or download from: https://ngrok.com/download
+
+   # Expose the local server
+   ngrok http 8000
+   ```
+
+   This will give you an HTTPS URL like `https://abc123.ngrok.io`.
+
+5. **Configure Claude Code**:
+
+   Add the Fenic documentation server to Claude Code using the ngrok URL with `/mcp` endpoint:
+
+   ```bash
+   claude mcp add -t http fenic-docs https://your-ngrok-url.ngrok.io/mcp
+   ```
+
+   That's it! The Fenic documentation tools are now available in your Claude Code session.
 
 ## Tools Provided
 
-### search(query, max_results=30)
+### search_fenic_api(query)
 
-Search the fenic codebase and stored learnings for relevant information. Supports regex patterns.
+Search Fenic API documentation using regex patterns. Returns matching API elements including functions, classes, methods, and their docstrings.
 
 ### get_project_overview()
 
@@ -125,9 +133,13 @@ Get a comprehensive overview of the fenic project with its API structure.
 
 Get the hierarchical tree structure of fenic's public API.
 
-### store_learning(question, answer, ...)
+### get_entity(qualified_name)
 
-Store Q&A pairs from interactions for future search retrieval.
+Get detailed information about a specific API entity by its fully qualified name.
+
+### search_by_type(element_type, pattern)
+
+Search for specific types of API elements (class, function, method, module) with optional pattern matching.
 
 ## Database Location
 
@@ -142,14 +154,15 @@ You can access this database directly with DuckDB tools for inspection and analy
 
 **Server fails to start with "Missing required tables" error:**
 
-- Run `python populate_tables.py` to create the documentation database
+- Run `uv run populate_tables.py` to create the documentation database
 - Ensure you have `GEMINI_API_KEY` set as an environment variable
 - Check that the script completed successfully (should show "Successfully created all required tables")
 
-**API key errors:**
+**API key errors during populate_tables:**
 
 - Ensure `GEMINI_API_KEY` is set with a valid Google AI Studio API key
 - Get your API key from: https://aistudio.google.com/apikey
+
 
 **Permission errors:**
 
@@ -159,4 +172,4 @@ You can access this database directly with DuckDB tools for inspection and analy
 **Import errors:**
 
 - Ensure you've activated the virtual environment: `source .venv/bin/activate`
-- Run `uv pip install -e .` to install all dependencies
+- Run `uv sync` to install all dependencies
