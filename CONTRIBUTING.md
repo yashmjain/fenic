@@ -105,6 +105,8 @@ uv run --group docs mkdocs serve
 
 ## ✅ Running Tests
 
+> ⚠️ Note: All tests require a valid OpenAI/Anthropic API key set in the environment variables.
+
 ### Python Tests
 
 Run a specific test file:
@@ -166,8 +168,6 @@ just test-cloud
 uv sync --extra=cloud
 uv run pytest -m cloud tests
 ```
-
-> ⚠️ Note: All tests require a valid OpenAI/Anthropic API key set in the environment variables.
 
 ---
 
