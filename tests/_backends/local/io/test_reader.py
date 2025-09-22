@@ -957,13 +957,13 @@ def test_read_public_huggingface_datasets(request, local_session_config, temp_di
     assert df.count() == 30
     assert df.schema == TEST_PARQUET_SCHEMA
 
-    # Test multiple parquet files with glob 
+    # Test multiple parquet files with glob
     parquet_path = "hf://datasets/typedef-ai/fenic-test-datasets-public/names_and_occupations_*.parquet"
     df = session.read.parquet(parquet_path)
     assert df.count() == 30
     assert df.schema == TEST_PARQUET_SCHEMA
 
-    # Test with a parquet file at commit 
+    # Test with a parquet file at commit
     parquet_path = "hf://datasets/typedef-ai/fenic-test-datasets-public@58138e6c12e70033f6e36307c7a149a1c13dfc38/names_and_occupations_2.parquet"
     df = session.read.parquet(parquet_path)
     assert df.count() == 10
@@ -1436,23 +1436,23 @@ def test_read_large_pdfs_with_fields(local_session, temp_dir_just_one_file):
         mod_date = row["mod_date"]
         creation_dt = datetime.strptime(creation_date, "D:%Y%m%d%H%M%S")
         mod_dt = datetime.strptime(mod_date, "D:%Y%m%d%H%M%S")
-        assert creation_dt >= start_time
-        assert mod_dt >= start_time
-        assert not row["is_encrypted"]
-        assert row["size"] > prev_doc_size
+        assert creation_dt >= start_time, f"PDF {i+1} expected to have a creation date after {start_time}"
+        assert mod_dt >= start_time, f"PDF {i+1} expected to have a modification date after {start_time}"
+        assert not row["is_encrypted"] , "PDF expected to be not encrypted"
+        assert row["size"] > prev_doc_size, f"PDF {i+1} expected to be larger than previous PDF"
         prev_doc_size = row["size"]
         if i == 0:
-            assert not row["has_forms"]
-            assert not row["has_signature_fields"]
-            assert row["image_count"] == 0
-            assert row["page_count"] == file1_pages
+            assert not row["has_forms"] , "PDF 1 expected to have no forms"
+            assert not row["has_signature_fields"] , "PDF 1 expected to have no signature fields"
+            assert row["image_count"] == 0, "PDF 1 expected to have no images"
+            assert row["page_count"] == file1_pages, f"PDF 1 expected to have {file1_pages} pages"
         elif i == 1:
-            assert row["has_forms"]
-            assert not row["has_signature_fields"]
-            assert row["image_count"] > 0
-            assert row["page_count"] == file2_pages
+            assert row["has_forms"] , "PDF 2 expected to have forms"
+            assert not row["has_signature_fields"] , "PDF 2 expected to have no signature fields"
+            assert row["image_count"] > 0, "PDF 2 expected to have images"
+            assert row["page_count"] == file2_pages, f"PDF 2 expected to have {file2_pages} pages"
         elif i == 2:
-            assert row["has_forms"]
-            assert row["has_signature_fields"]
-            assert row["image_count"] > 0
-            assert row["page_count"] == file3_pages
+            assert row["has_forms"] , "PDF 3 expected to have forms"
+            assert row["has_signature_fields"] , "PDF 3 expected to have signature fields"
+            assert row["image_count"] > 0, "PDF 3 expected to have images"
+            assert row["page_count"] == file3_pages, f"PDF 3 expected to have {file3_pages} pages"
