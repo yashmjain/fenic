@@ -178,7 +178,13 @@ class OpenAIChatCompletionsCore:
                 usage=response_usage,
             )
 
-        except (RateLimitError, APITimeoutError, APIConnectionError) as e:
+        except (APITimeoutError, APIConnectionError) as e:
+            return TransientException(e)
+
+        except RateLimitError as e:
+            if e.response and e.response.json()["error"]["type"] == "insufficient_quota":
+                logger.error(f"Insufficient quota on {self._model_provider.value} provider: {e}")
+                return FatalException(e)
             return TransientException(e)
 
         except NotFoundError as e:
