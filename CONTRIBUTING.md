@@ -105,7 +105,7 @@ uv run --group docs mkdocs serve
 
 ## ✅ Running Tests
 
-> ⚠️ Note: All tests require a valid OpenAI/Anthropic API key set in the environment variables.
+> ⚠️ Note: To run tests, you must set a valid API key in the environment variables for one of the supported model providers.
 
 ### Python Tests
 
